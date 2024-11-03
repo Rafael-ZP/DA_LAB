@@ -1,0 +1,49 @@
+name: Run MapReduce Job
+
+on:
+  workflow_dispatch:
+    inputs:
+      inputPath:
+        description: 'Input HDFS Path'
+        required: true
+        default: '/maxinput'
+      outputPath:
+        description: 'Output HDFS Path'
+        required: true
+        default: '/maxoutput'
+
+jobs:
+  hadoop-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+
+      - name: Clone repository
+        uses: actions/checkout@v2
+
+      - name: Install Hadoop
+        run: |
+          wget https://downloads.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz
+          tar -xzf hadoop-3.3.4.tar.gz
+          sudo mv hadoop-3.3.4 /usr/local/hadoop
+          export HADOOP_HOME=/usr/local/hadoop
+          export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+
+      - name: Compile Java files
+        run: |
+          mkdir -p classes
+          javac -classpath "$HADOOP_HOME/share/hadoop/common/hadoop-common-3.3.4.jar:$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-client-core-3.3.4.jar" -d classes Maxtempdriver.java Maxtemperature.java Maxtempreduce.java
+          jar -cvf MaxTemp.jar -C classes/ .
+
+      - name: Run Hadoop Job
+        env:
+          HADOOP_HOME: /usr/local/hadoop
+        run: |
+          hadoop fs -mkdir -p ${{ github.event.inputs.inputPath }}
+          hadoop fs -copyFromLocal tempinput.txt ${{ github.event.inputs.inputPath }}
+          hadoop jar MaxTemp.jar maxtempdriver ${{ github.event.inputs.inputPath }} ${{ github.event.inputs.outputPath }}
+          hadoop fs -cat ${{ github.event.inputs.outputPath }}/part-r-00000
